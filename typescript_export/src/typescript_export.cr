@@ -14,19 +14,40 @@ module TypeScriptExport
       "Float32"              => "number",
       "Bool"                 => "boolean",
       "Time"                 => "Date",
-      "Array(String)"        => "string[]",
-      "Array(Int32)"         => "number[]",
-      "Hash(String, String)" => "Record<string, string>",
-      "Hash(String, Int32)"  => "Record<string, number>",
-      "Nil"                  => "null | undefined",
+      "Nil"                  => "null",
     }
 
+    {% for klass in BaseSerializer.all_subclasses %}
+      crystal_to_ts_types[{{klass.name.stringify}}] = {{klass.name.stringify}}
+    {% end %}
     {% type = parse_type(t).resolve %}
-    {% nilable = type.nilable? ? "?" : "" %} 
+    {% nilable = type.nilable? ? " | null" : "" %} 
 
-    base_type = {{type.stringify.gsub(/\((\w+) | Nil\)/, "\\1").split("|").first}}
-    mapped = crystal_to_ts_types[base_type]? || "any"
-    base_type + {{nilable}}
+    base_type = {{type.stringify}}.match(/\w+(?:\([\w|, ]+\))?/).try(&.[0]).to_s
+
+    if base_type =~ /Array/
+      item_types = base_type.match(/Array\(([\w|, ]+)\)/)
+        .try(&.[1]).to_s
+        .split(" | ")
+        .map { |t| crystal_to_ts_types[t]? || "any" }
+      if item_types.size > 1
+        "(" + item_types.join(" | ") + ")[]"
+      else
+        # t = TypeScriptExport.to_typescript_type("#{item_types.first.class}")
+        item_types.first + "[]"
+      end
+    elsif base_type =~ /Hash/
+      key_and_type = base_type.match(/Hash\(([\w|, ]+)\)/)
+        .try(&.[1]).to_s
+        .split(", ")
+      key_type = key_and_type.shift
+      types = key_and_type.join.split(" | ").map { |t| crystal_to_ts_types[t]? || "any" }
+      mapped_key = crystal_to_ts_types[key_type]? || "any"
+      "Record<" + mapped_key + ", " + types.join(" | ") + ">"
+    else
+      mapped = crystal_to_ts_types[base_type]? || "any"
+      mapped + {{nilable}}
+    end
   end
 end
 
@@ -35,7 +56,7 @@ macro generate_typescript_definitions
   
   {% for klass in BaseSerializer.all_subclasses %}
     {% if klass.annotation(TypeScriptExport::Serializer) %}
-      puts "\nexport type #{{{klass.name.stringify}}} {"
+      puts "\nexport type #{{{klass.name.stringify}}} = {"
 
       # Extract all methods with Field annotation
       {% for method in klass.methods %}
@@ -45,7 +66,9 @@ macro generate_typescript_definitions
           
           # Get return type
           {% if method.return_type %}
-            puts " #{field_name.camelcase(lower: true)}: " + TypeScriptExport.to_typescript_type({{method.return_type.stringify}}) + ";"
+            {% type = parse_type(method.return_type.stringify).resolve %}
+            {% nilable = type.nilable? ? "?" : "" %} 
+            puts "  #{field_name.camelcase(lower: true)}#{{{nilable}}}: " + TypeScriptExport.to_typescript_type({{method.return_type.stringify}}) + ";"
           {% else %}
             # Default to any if no return type is specified
             puts "  #{field_name}: any;"

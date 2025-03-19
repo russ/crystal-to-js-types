@@ -11,6 +11,8 @@ class UserSerializer < BaseSerializer
       birth_date:   birth_date,
       bank_account: bank_account,
       friends:      friends,
+      preferences:  preferences,
+      wishlist:     wishlist,
     }
   end
 
@@ -35,7 +37,7 @@ class UserSerializer < BaseSerializer
   end
 
   @[TypeScriptExport::Field]
-  def bank_account : BankAccountSerializer
+  def bank_account : BankAccountSerializer?
     BankAccountSerializer.new(
       BankAccount.new(balance: 100)
     )
@@ -43,10 +45,16 @@ class UserSerializer < BaseSerializer
 
   @[TypeScriptExport::Field]
   def friends : Array(UserSerializer)
-    [
-      UserSerializer.new(
-        User.new(balance: 100)
-      )
-    ]
+    [] of UserSerializer
+  end
+
+  @[TypeScriptExport::Field]
+  def preferences : Hash(String, String? | Int32? | Bool?)
+    {} of String => String? | Int32 | Bool?
+  end
+
+  @[TypeScriptExport::Field]
+  def wishlist : Array(String | Int32)
+    [] of String | Int32
   end
 end

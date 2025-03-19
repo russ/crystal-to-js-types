@@ -5,12 +5,18 @@ class BankAccountSerializer < BaseSerializer
 
   def render
     {
-      balance: @bank_account.balance,
+      balance: balance,
+      transactions: transactions,
     }
   end
 
   @[TypeScriptExport::Field]
   def balance : Int32
     @bank_account.balance
+  end
+
+  @[TypeScriptExport::Field]
+  def transactions : Array(TransactionSerializer)
+    [] of TransactionSerializer
   end
 end
